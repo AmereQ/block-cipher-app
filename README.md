@@ -1,3 +1,5 @@
+**Project Status:** In development 🚧
+
 # Block Cipher Encryption App 🔐
 
 A GUI-based application built in Python that allows users to encrypt and decrypt messages using three modern block cipher algorithms:
