@@ -1,0 +1,2 @@
+szyfrowanie,AES,0.410
+deszyfrowanie,AES,0.162
