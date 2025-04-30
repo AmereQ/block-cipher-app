@@ -59,10 +59,11 @@ def szyfruj():
             ciphertext = encrypt_serpent_ecb(tekst, current_key)
         else:
             raise ValueError("Nieznany algorytm")
-
+        tekst_bajty = tekst.encode('utf-8')
+        label_dlugosc_wiadomosci.config(text=f"Długość wiadomości (binarna): {len(tekst_bajty)} bajtów")
+        label_dlugosc_szyfrowania.config(text=f"Długość szyfrogramu {len(ciphertext)}bajtów")
         end_time = time.perf_counter()
         czas_szyfrowania = (end_time - start_time) * 1000  # ms
-
         wynik_var.set(base64.b64encode(ciphertext).decode())
         label_czas_szyfrowania.config(text=f"Czas szyfrowania: {czas_szyfrowania:.3f} ms")
 
@@ -126,14 +127,46 @@ def pokaz_tabele():
     except Exception as e:
         messagebox.showerror("Błąd", f"Błąd wczytywania pliku:\n{e}")
 
+def losowa_dlugosc():
+    wybor = combo_dane.get()
+    if wybor == "16B":
+        liczba = 16
+    elif wybor == "32B":
+        liczba = 32
+    elif wybor == "64B":
+        liczba = 64
+    elif wybor == "128B":
+        liczba = 128
+    elif wybor == "1KB":
+        liczba = 1024
+    elif wybor == "10KB":
+        liczba = 10240
+    else:
+        messagebox.showerror("Błąd", "Wybierz prawidłową długość danych.")
+        return
+    text = os.urandom(liczba)
+    text_base64 = base64.b64encode(text).decode('utf-8')
+    wynik_losowy.set(text_base64)
+    label_dlugosc_wiadomosci.config(text=f"Długość wiadomości (binarna): {len(text)} B, base64: {len(text_base64)} znaków")
 # --- GUI ---
 root = tk.Tk()
 root.title("Szyfrowanie blokowe – AES / Twofish / Serpent")
 root.geometry("600x600")
-
-tk.Label(root, text="Wiadomość:").pack()
-entry_wiadomosc = tk.Entry(root, width=60)
-entry_wiadomosc.pack(pady=5)
+frame_wiadomosc = tk.Frame(root)
+frame_wiadomosc.pack(pady=5)
+tk.Label(frame_wiadomosc, text="Wiadomość:").pack()
+wynik_losowy = tk.StringVar()
+entry_wiadomosc = tk.Entry(frame_wiadomosc,textvariable=wynik_losowy, width=60)
+entry_wiadomosc.pack(side=tk.LEFT, padx=5)
+btn_czysc = tk.Button(frame_wiadomosc, text="Wyczyść", command=lambda: entry_wiadomosc.delete(0, tk.END))
+btn_czysc.pack(side=tk.LEFT)
+frame_losowa = tk.Frame(root)
+frame_losowa.pack(pady=5)
+tk.Label(frame_losowa, text="Losowa treść:").pack()
+combo_dane = ttk.Combobox(frame_losowa, values=["16B", "32B", "64B", "128B", "1KB", "10KB"], state="readonly")
+combo_dane.current(0)
+combo_dane.pack(side=tk.LEFT)
+tk.Button(frame_losowa, text="Generuj", command=losowa_dlugosc).pack(side=tk.LEFT,padx=5)
 
 tk.Label(root, text="Wybierz algorytm szyfrowania:").pack()
 combo_algorytm = ttk.Combobox(root, values=["AES", "Twofish", "Serpent"], state="readonly")
@@ -148,8 +181,11 @@ combo_klucz.pack()
 tk.Button(root, text="Wygeneruj klucz", command=wygeneruj_klucz).pack(pady=5)
 label_klucz = tk.Label(root, text="Klucz: brak", fg="gray")
 label_klucz.pack()
-
-tk.Button(root, text="Szyfruj", command=szyfruj).pack(pady=5)
+frame_szyfrowanie = tk.Frame(root)
+frame_szyfrowanie.pack(pady=5)
+tk.Button(frame_szyfrowanie, text="Szyfruj", command=szyfruj).pack(side=tk.LEFT,pady=5)
+use_padding = tk.BooleanVar(value=True)
+tk.Checkbutton(frame_szyfrowanie, text="Użyj paddingu (zalecane)", variable=use_padding).pack(side=tk.RIGHT)
 label_czas_szyfrowania = tk.Label(root, text="Czas szyfrowania: brak", fg="blue")
 label_czas_szyfrowania.pack()
 
@@ -166,5 +202,8 @@ wynik_odszyfrowany_var = tk.StringVar()
 tk.Entry(root, textvariable=wynik_odszyfrowany_var, width=60).pack()
 
 tk.Button(root, text="Pokaż tabelę czasów", command=pokaz_tabele).pack(pady=10)
-
+label_dlugosc_wiadomosci = tk.Label(root, text="", fg="gray")
+label_dlugosc_wiadomosci.pack()
+label_dlugosc_szyfrowania = tk.Label(root, text="", fg="gray")
+label_dlugosc_szyfrowania.pack()
 root.mainloop()
