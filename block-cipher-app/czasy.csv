@@ -1,0 +1,14 @@
+Operacja,Algorytm,Czas (ms),Długość wejścia (B),Długość szyfrogramu (B)
+szyfrowanie,Twofish,0.284,16,32
+deszyfrowanie,Twofish,0.052,32,16
+szyfrowanie,Twofish,0.315,16,32
+deszyfrowanie,Twofish,0.06,32,16
+szyfrowanie,Twofish,0.342,16,32
+szyfrowanie,AES,0.379,16,32
+deszyfrowanie,AES,0.094,32,16
+szyfrowanie,AES,0.351,16,16
+deszyfrowanie,AES,0.08,16,16
+szyfrowanie,AES,0.3,16,16
+deszyfrowanie,AES,0.062,16,16
+szyfrowanie,AES,0.222,16,16
+deszyfrowanie,AES,0.069,16,16

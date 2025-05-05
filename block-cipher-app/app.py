@@ -1,5 +1,8 @@
+import csv
+import string
 import tkinter as tk
-from tkinter import ttk, messagebox
+import random
+from tkinter import ttk, messagebox, filedialog
 import base64
 import time
 import os
@@ -9,13 +12,26 @@ from ciphers.twofish_cipher import generate_twofish_key, encrypt_twofish_ecb, de
 from ciphers.serpent_cipher import generate_serpent_key, encrypt_serpent_ecb, decrypt_serpent_ecb
 
 current_key = None
-czas_log_file = "czasy.txt"
+wiadomosc_bin = None
 
 # Funkcja zapisu czasu do pliku
-def zapisz_czas(operacja, algorytm, czas_ms):
+def zapisz_czas(operacja, algorytm, czas_ms, dlugosc_we=0, dlugosc_szyf=0):
+    naglowki = ["Operacja", "Algorytm", "Czas (ms)", "Długość wejścia (B)", "Długość szyfrogramu (B)"]
+    wiersz = {
+        "Operacja": operacja,
+        "Algorytm": algorytm,
+        "Czas (ms)": round(czas_ms, 3),
+        "Długość wejścia (B)": dlugosc_we,
+        "Długość szyfrogramu (B)": dlugosc_szyf
+    }
+    plik = "czasy.csv"
+    nowy = not os.path.exists(plik)
     try:
-        with open(czas_log_file, "a") as f:
-            f.write(f"{operacja},{algorytm},{czas_ms:.3f}\n")
+        with open(plik, mode='a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=naglowki)
+            if nowy:
+                writer.writeheader()
+            writer.writerow(wiersz)
     except Exception as e:
         messagebox.showerror("Błąd", f"Nie udało się zapisać czasu do pliku:\n{e}")
 
@@ -45,29 +61,31 @@ def szyfruj():
         messagebox.showwarning("Brak klucza", "Najpierw wygeneruj klucz!")
         return
     tekst = entry_wiadomosc.get()
+    dane_bin = tekst.encode("utf-8")
+    if wiadomosc_bin:
+        dane_bin = wiadomosc_bin
     if not tekst:
         messagebox.showwarning("Brak danych", "Wpisz wiadomość do zaszyfrowania.")
         return
     try:
         start_time = time.perf_counter()
-
+        use_padding_flag = use_padding.get()
         if alg == "AES":
-            ciphertext = encrypt_aes_ecb(tekst, current_key)
+            ciphertext = encrypt_aes_ecb(tekst, current_key, use_padding=use_padding_flag)
         elif alg == "Twofish":
-            ciphertext = encrypt_twofish_ecb(tekst, current_key)
+            ciphertext = encrypt_twofish_ecb(tekst, current_key, use_padding=use_padding_flag)
         elif alg == "Serpent":
-            ciphertext = encrypt_serpent_ecb(tekst, current_key)
+            ciphertext = encrypt_serpent_ecb(tekst, current_key, use_padding=use_padding_flag)
         else:
             raise ValueError("Nieznany algorytm")
-        tekst_bajty = tekst.encode('utf-8')
-        label_dlugosc_wiadomosci.config(text=f"Długość wiadomości (binarna): {len(tekst_bajty)} bajtów")
-        label_dlugosc_szyfrowania.config(text=f"Długość szyfrogramu {len(ciphertext)}bajtów")
+        label_dlugosc_wiadomosci.config(text=f"Długość wiadomości (binarna): {len(dane_bin)} bajtów")
+        label_dlugosc_szyfrowania.config(text=f"Długość szyfrogramu: {len(ciphertext)} bajtów")
         end_time = time.perf_counter()
         czas_szyfrowania = (end_time - start_time) * 1000  # ms
         wynik_var.set(base64.b64encode(ciphertext).decode())
         label_czas_szyfrowania.config(text=f"Czas szyfrowania: {czas_szyfrowania:.3f} ms")
 
-        zapisz_czas("szyfrowanie", alg, czas_szyfrowania)
+        zapisz_czas("szyfrowanie", alg, czas_szyfrowania, dlugosc_we=len(dane_bin), dlugosc_szyf=len(ciphertext))
     except Exception as e:
         messagebox.showerror("Błąd", f"Błąd szyfrowania: {e}")
 
@@ -79,15 +97,15 @@ def deszyfruj():
         return
     try:
         ciphertext = base64.b64decode(wynik_var.get())
-
+        use_padding_flag = use_padding.get()
         start_time = time.perf_counter()
 
         if alg == "AES":
-            plaintext = decrypt_aes_ecb(ciphertext, current_key)
+            plaintext = decrypt_aes_ecb(ciphertext, current_key, use_padding=use_padding_flag)
         elif alg == "Twofish":
-            plaintext = decrypt_twofish_ecb(ciphertext, current_key)
+            plaintext = decrypt_twofish_ecb(ciphertext, current_key, use_padding=use_padding_flag)
         elif alg == "Serpent":
-            plaintext = decrypt_serpent_ecb(ciphertext, current_key)
+            plaintext = decrypt_serpent_ecb(ciphertext, current_key, use_padding=use_padding_flag)
         else:
             raise ValueError("Nieznany algorytm")
 
@@ -97,57 +115,108 @@ def deszyfruj():
         wynik_odszyfrowany_var.set(plaintext)
         label_czas_deszyfrowania.config(text=f"Czas deszyfrowania: {czas_deszyfrowania:.3f} ms")
 
-        zapisz_czas("deszyfrowanie", alg, czas_deszyfrowania)
+        zapisz_czas("deszyfrowanie", alg, czas_deszyfrowania, dlugosc_we=len(ciphertext), dlugosc_szyf=len(plaintext))
     except Exception as e:
         messagebox.showerror("Błąd", f"Nie udało się odszyfrować:\n{e}")
 
 # Funkcja do wyświetlania tabeli
 def pokaz_tabele():
-    if not os.path.exists(czas_log_file):
+    csv_file = "czasy.csv"
+    if not os.path.exists(csv_file):
         messagebox.showinfo("Brak danych", "Plik z czasami nie istnieje.")
         return
 
     tabela_okno = tk.Toplevel(root)
     tabela_okno.title("Tabela czasów operacji")
-    tabela_okno.geometry("400x300")
+    tabela_okno.geometry("900x300")
 
-    tree = ttk.Treeview(tabela_okno, columns=("Operacja", "Algorytm", "Czas (ms)"), show="headings")
-    tree.heading("Operacja", text="Operacja")
-    tree.heading("Algorytm", text="Algorytm")
-    tree.heading("Czas (ms)", text="Czas (ms)")
-
-    tree.pack(fill=tk.BOTH, expand=True)
+    tree = ttk.Treeview(tabela_okno, columns=("Operacja", "Algorytm", "Czas (ms)", "Długość wejścia (B)", "Długość szyfrogramu (B)"), show="headings")
+    for col in ("Operacja", "Algorytm", "Czas (ms)", "Długość wejścia (B)", "Długość szyfrogramu (B)"):
+        tree.heading(col, text=col)
+        tree.column(col, width=100)
+    tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     try:
-        with open(czas_log_file, "r") as f:
-            for line in f:
-                parts = line.strip().split(",")
-                if len(parts) == 3:
-                    tree.insert("", tk.END, values=(parts[0], parts[1], parts[2]))
+        with open(csv_file, newline='', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                if len(row) == 5:
+                    tree.insert("", tk.END, values=row)
     except Exception as e:
-        messagebox.showerror("Błąd", f"Błąd wczytywania pliku:\n{e}")
+        messagebox.showerror("Błąd", f"Błąd wczytywania CSV:\n{e}")
 
+    def usun_wybrany():
+        zaznaczone = tree.selection()
+        if not zaznaczone:
+            messagebox.showinfo("Brak wyboru", "Wybierz wiersz do usunięcia.")
+            return
+
+        for item in zaznaczone:
+            wartosci = tree.item(item)["values"]
+            tree.delete(item)
+
+            # Usuń z pliku CSV
+            with open(csv_file, newline='', encoding='utf-8') as f:
+                rows = list(csv.reader(f))
+            with open(csv_file, "w", newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(rows[0])  # nagłówek
+                for r in rows[1:]:
+                    if r != list(map(str, wartosci)):
+                        writer.writerow(r)
+
+    def usun_wszystkie():
+        if messagebox.askyesno("Potwierdzenie", "Czy na pewno chcesz usunąć wszystkie dane?"):
+            for item in tree.get_children():
+                tree.delete(item)
+            with open(csv_file, "w", newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Operacja", "Algorytm", "Czas (ms)", "Długość wejścia (B)", "Długość szyfrogramu (B)"])
+
+    def eksportuj_csv():
+        nowa_sciezka = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+        if nowa_sciezka:
+            try:
+                with open(nowa_sciezka, "w", newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Operacja", "Algorytm", "Rozmiar", "Padding", "Czas (ms)"])
+                    for row_id in tree.get_children():
+                        writer.writerow(tree.item(row_id)["values"])
+                messagebox.showinfo("Eksport zakończony", f"Dane zapisane do {nowa_sciezka}")
+            except Exception as e:
+                messagebox.showerror("Błąd eksportu", str(e))
+    # Przyciski
+    przyciski_frame = tk.Frame(tabela_okno)
+    przyciski_frame.pack(pady=5)
+
+    tk.Button(przyciski_frame, text="Usuń wybrany wiersz", command=usun_wybrany).grid(row=0, column=0, padx=5)
+    tk.Button(przyciski_frame, text="Usuń wszystkie dane", command=usun_wszystkie).grid(row=0, column=1, padx=5)
+    tk.Button(przyciski_frame, text="Eksportuj do CSV", command=eksportuj_csv).grid(row=0, column=2, padx=5)
 def losowa_dlugosc():
+    global wiadomosc_bin
     wybor = combo_dane.get()
-    if wybor == "16B":
-        liczba = 16
-    elif wybor == "32B":
-        liczba = 32
-    elif wybor == "64B":
-        liczba = 64
-    elif wybor == "128B":
-        liczba = 128
-    elif wybor == "1KB":
-        liczba = 1024
-    elif wybor == "10KB":
-        liczba = 10240
-    else:
+    rozmiary = {
+        "16B": 16,
+        "32B": 32,
+        "64B": 64,
+        "128B": 128,
+        "1KB": 1024,
+        "10KB": 10240,
+    }
+
+    liczba = rozmiary.get(wybor)
+    if liczba is None:
         messagebox.showerror("Błąd", "Wybierz prawidłową długość danych.")
         return
-    text = os.urandom(liczba)
-    text_base64 = base64.b64encode(text).decode('utf-8')
-    wynik_losowy.set(text_base64)
-    label_dlugosc_wiadomosci.config(text=f"Długość wiadomości (binarna): {len(text)} B, base64: {len(text_base64)} znaków")
+
+    # Generuj losowy tekst ASCII o zadanej długości
+    znaki = string.ascii_letters + string.digits + string.punctuation
+    losowy_tekst = ''.join(random.choices(znaki, k=liczba))
+
+    # Ustawiamy jako wiadomość
+    wynik_losowy.set(losowy_tekst)
+    wiadomosc_bin = losowy_tekst.encode("utf-8")
 # --- GUI ---
 root = tk.Tk()
 root.title("Szyfrowanie blokowe – AES / Twofish / Serpent")
@@ -181,11 +250,11 @@ combo_klucz.pack()
 tk.Button(root, text="Wygeneruj klucz", command=wygeneruj_klucz).pack(pady=5)
 label_klucz = tk.Label(root, text="Klucz: brak", fg="gray")
 label_klucz.pack()
-frame_szyfrowanie = tk.Frame(root)
-frame_szyfrowanie.pack(pady=5)
-tk.Button(frame_szyfrowanie, text="Szyfruj", command=szyfruj).pack(side=tk.LEFT,pady=5)
+
 use_padding = tk.BooleanVar(value=True)
-tk.Checkbutton(frame_szyfrowanie, text="Użyj paddingu (zalecane)", variable=use_padding).pack(side=tk.RIGHT)
+tk.Checkbutton(root, text="Użyj paddingu (zalecane)", variable=use_padding).pack()
+tk.Button(root, text="Szyfruj", command=szyfruj).pack(pady=5)
+
 label_czas_szyfrowania = tk.Label(root, text="Czas szyfrowania: brak", fg="blue")
 label_czas_szyfrowania.pack()
 
@@ -200,8 +269,7 @@ label_czas_deszyfrowania.pack()
 tk.Label(root, text="Odszyfrowana wiadomość:").pack()
 wynik_odszyfrowany_var = tk.StringVar()
 tk.Entry(root, textvariable=wynik_odszyfrowany_var, width=60).pack()
-
-tk.Button(root, text="Pokaż tabelę czasów", command=pokaz_tabele).pack(pady=10)
+tk.Button(root, text="Pokaż tabelę czasów", command=pokaz_tabele).pack(pady=5)
 label_dlugosc_wiadomosci = tk.Label(root, text="", fg="gray")
 label_dlugosc_wiadomosci.pack()
 label_dlugosc_szyfrowania = tk.Label(root, text="", fg="gray")
