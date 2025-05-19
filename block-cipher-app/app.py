@@ -11,6 +11,11 @@ from ciphers.aes_cipher import generate_aes_key, encrypt_aes_ecb, decrypt_aes_ec
 from ciphers.twofish_cipher import generate_twofish_key, encrypt_twofish_ecb, decrypt_twofish_ecb
 from ciphers.serpent_cipher import generate_serpent_key, encrypt_serpent_ecb, decrypt_serpent_ecb
 
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import pandas as pd
+
+
 current_key = None
 wiadomosc_bin = None
 
@@ -217,6 +222,81 @@ def losowa_dlugosc():
     # Ustawiamy jako wiadomość
     wynik_losowy.set(losowy_tekst)
     wiadomosc_bin = losowy_tekst.encode("utf-8")
+    
+
+def pokaz_wykresy():
+    if not os.path.exists("czasy.csv"):
+        messagebox.showinfo("Brak danych", "Brak pliku z danymi.")
+        return
+
+    df = pd.read_csv("czasy.csv")
+    if df.empty:
+        messagebox.showinfo("Brak danych", "Plik CSV jest pusty.")
+        return
+
+    def rysuj_wykres(wybor):
+        plt.clf()
+        fig, ax = plt.subplots(figsize=(8, 5))
+
+        if wybor == "Czas vs Algorytm":
+            df.groupby("Algorytm")["Czas (ms)"].mean().plot(kind="bar", ax=ax)
+            ax.set_ylabel("Średni czas (ms)")
+        elif wybor == "Czas vs Długość wejścia":
+            df.groupby("Długość wejścia (B)")["Czas (ms)"].mean().plot(ax=ax)
+            ax.set_ylabel("Średni czas (ms)")
+        elif wybor == "Czas szyfrowania vs deszyfrowania":
+            df.groupby(["Operacja"])["Czas (ms)"].mean().plot(kind="bar", ax=ax)
+            ax.set_ylabel("Średni czas (ms)")
+        elif wybor == "Czas (ms) w zależności od algorytmu i długości":
+            df.groupby(["Algorytm", "Długość wejścia (B)"])["Czas (ms)"].mean().unstack().T.plot(ax=ax)
+            ax.set_ylabel("Średni czas (ms)")
+        elif wybor == "Rozrzut czasów wg algorytmu":
+            df.boxplot(column="Czas (ms)", by="Algorytm", ax=ax)
+            plt.suptitle("")
+            ax.set_title("Rozrzut czasów wg algorytmu")
+        elif wybor == "Czas vs Długość szyfrogramu":
+            df.groupby("Długość szyfrogramu (B)")["Czas (ms)"].mean().plot(ax=ax)
+            ax.set_ylabel("Średni czas (ms)")
+        ax.set_xlabel(wybor)
+        ax.set_title(wybor)
+        ax.grid(True)
+        plt.tight_layout()
+        return fig
+
+    def pokaz_wybrany_wykres(event):
+        wybor = combo_wykres.get()
+        fig = rysuj_wykres(wybor)
+        for widget in plot_frame.winfo_children():
+            widget.destroy()
+        canvas = FigureCanvasTkAgg(fig, master=plot_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack()
+
+    wykres_okno = tk.Toplevel(root)
+    wykres_okno.title("Wykresy porównawcze")
+    wykres_okno.geometry("900x600")
+
+    opcje = [
+        "Czas vs Algorytm",
+        "Czas vs Długość wejścia",
+        "Czas szyfrowania vs deszyfrowania",
+        "Czas (ms) w zależności od algorytmu i długości",
+        "Rozrzut czasów wg algorytmu",
+        "Czas vs Długość szyfrogramu"
+    ]
+
+    combo_wykres = ttk.Combobox(wykres_okno, values=opcje, state="readonly")
+    combo_wykres.current(0)
+    combo_wykres.pack(pady=5)
+    combo_wykres.bind("<<ComboboxSelected>>", pokaz_wybrany_wykres)
+
+    plot_frame = tk.Frame(wykres_okno)
+    plot_frame.pack(fill=tk.BOTH, expand=True)
+
+    pokaz_wybrany_wykres(None)  # domyślnie pierwszy wykres
+
+
+
 # --- GUI ---
 root = tk.Tk()
 root.title("Szyfrowanie blokowe – AES / Twofish / Serpent")
@@ -274,4 +354,5 @@ label_dlugosc_wiadomosci = tk.Label(root, text="", fg="gray")
 label_dlugosc_wiadomosci.pack()
 label_dlugosc_szyfrowania = tk.Label(root, text="", fg="gray")
 label_dlugosc_szyfrowania.pack()
+tk.Button(root, text="Pokaż wykresy", command=pokaz_wykresy).pack(pady=5)
 root.mainloop()
